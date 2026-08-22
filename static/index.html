@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Paytm Sarthi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&family=Noto+Sans+Kannada:wght@400;600;700&family=Noto+Sans+Malayalam:wght@400;600;700&family=Noto+Sans+Bengali:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #0f7a5f;       /* deep teal/emerald - primary actions, success */
+    --accent-dark: #0b5c47;
+    --ink: #1a1a1a;
+    --ink-muted: #555;
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --border: #e2e2e2;
+    --error-bg: #fbf3e7;     /* calm neutral, never alarming red */
+    --error-ink: #4a3f2f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Noto Sans", "Noto Sans Devanagari", "Noto Sans Tamil",
+      "Noto Sans Telugu", "Noto Sans Kannada", "Noto Sans Malayalam",
+      "Noto Sans Bengali", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  .app {
+    width: 100%;
+    max-width: 430px;
+    min-height: 100vh;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    padding: 24px 24px 32px;
+    position: relative;
+  }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  .topbar button {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 14px;
+    color: var(--ink-muted);
+    font-family: inherit;
+  }
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  /* ---- Merchant screen ---- */
+  #merchant-screen { align-items: center; justify-content: center; text-align: center; gap: 24px; }
+  .mic-button {
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 48px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  .mic-button:active { transform: scale(0.96); }
+  .mic-button.listening { background: #c0392b0d; background: var(--accent-dark); animation: pulse 1.2s infinite; }
+  .mic-button.processing { background: var(--ink-muted); animation: none; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(15,122,95,0.4); }
+    70% { box-shadow: 0 0 0 22px rgba(15,122,95,0); }
+    100% { box-shadow: 0 0 0 0 rgba(15,122,95,0); }
+  }
+  #merchant-state-text { font-size: 17px; color: var(--ink-muted); min-height: 24px; }
+  #merchant-hint { font-size: 15px; color: var(--ink-muted); max-width: 280px; }
+
+  /* ---- Payer screen ---- */
+  #payer-screen { justify-content: flex-start; }
+  .step-label {
+    font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #999; margin-bottom: 36px;
+  }
+  .amount-display { font-size: 72px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; margin-bottom: 18px; }
+  .confirm-line { display: flex; align-items: center; gap: 10px; font-size: 18px; color: var(--ink-muted); margin-bottom: 48px; min-height: 26px; }
+  .speaker-icon {
+    width: 24px; height: 24px; border-radius: 50%;
+    border: 1.5px solid var(--ink-muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; flex-shrink: 0; color: var(--ink-muted);
+  }
+  .speaker-icon.playing { border-color: var(--accent); color: var(--accent); animation: pulse-icon 0.8s infinite; }
+  @keyframes pulse-icon { 50% { opacity: 0.4; } }
+  .spacer { flex: 1; }
+  .btn-primary {
+    width: 100%; min-height: 52px; padding: 16px; font-size: 18px; font-weight: 600;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    margin-bottom: 14px; cursor: pointer; font-family: inherit;
+  }
+  .btn-primary:disabled { opacity: 0.6; cursor: default; }
+  .btn-secondary {
+    width: 100%; min-height: 44px; text-align: center; font-size: 15px;
+    color: var(--ink-muted); text-decoration: underline; background: none;
+    border: none; cursor: pointer; font-family: inherit;
+  }
+
+  /* ---- Manual amount input (never-dead-end fallback) ---- */
+  #manual-screen { justify-content: center; gap: 16px; }
+  #manual-screen label { font-size: 15px; font-weight: 600; color: var(--ink); }
+  #manual-amount-input {
+    width: 100%; min-height: 52px; font-size: 22px; padding: 12px 16px;
+    border: 1.5px solid var(--border); border-radius: 10px; font-family: inherit;
+  }
+
+  /* ---- Payment / status screens ---- */
+  #payment-screen, #success-screen { justify-content: center; align-items: center; text-align: center; gap: 18px; }
+  #payment-screen .qr { width: 200px; height: 200px; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+  #payment-screen .qr svg { display: block; width: 100%; height: 100%; }
+  .link-text { font-size: 14px; color: var(--ink-muted); word-break: break-all; }
+  .demo-controls { margin-top: 18px; padding-top: 18px; border-top: 1px dashed var(--border); width: 100%; text-align: center; }
+  .demo-controls p { font-size: 12px; color: #999; margin-bottom: 10px; }
+  .demo-controls button {
+    min-height: 44px; padding: 0 16px; margin: 0 6px; font-size: 14px;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--surface); font-family: inherit;
+  }
+  .success-icon { font-size: 56px; }
+  .success-title { font-size: 24px; font-weight: 700; }
+
+  /* ---- Toast (calm-neutral, never alarming) ---- */
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(120%);
+    background: var(--error-bg); color: var(--error-ink);
+    padding: 14px 18px; border-radius: 10px; font-size: 15px; max-width: 90%;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08); transition: transform 0.25s ease; z-index: 50;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  .spinner {
+    width: 20px; height: 20px; border: 2.5px solid rgba(255,255,255,0.4);
+    border-top-color: #fff; border-radius: 50%; display: inline-block;
+    animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  select {
+    font-family: inherit; font-size: 14px; min-height: 44px; border-radius: 8px;
+    border: 1px solid var(--border); padding: 0 10px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <button id="settings-toggle" type="button">Payer language: <span id="settings-lang-label"></span></button>
+    <button id="reset-btn" type="button" title="Clear demo state for a rehearsal or encore">Reset demo</button>
+  </div>
+
+  <div id="settings-panel" style="display:none; margin-bottom:20px;">
+    <label style="font-size:14px;">Payer's preferred language (one-time setting, not asked per transaction):</label>
+    <select id="payer-language-select" style="margin-top:8px; width:100%;"></select>
+  </div>
+
+  <!-- Screen 1: merchant recording -->
+  <div id="merchant-screen" class="screen active">
+    <button id="mic-button" class="mic-button" type="button" aria-label="Tap to speak the amount">&#127908;</button>
+    <div id="merchant-state-text">Tap to speak the amount</div>
+    <div id="merchant-hint">Speak in any language. No need to select one.</div>
+  </div>
+
+  <!-- Screen 2: manual amount fallback (never dead-ends) -->
+  <div id="manual-screen" class="screen">
+    <div class="step-label">Enter amount</div>
+    <label for="manual-amount-input">Amount (&#8377;)</label>
+    <input id="manual-amount-input" type="number" inputmode="numeric" min="1" step="1" placeholder="0">
+    <button id="manual-continue-btn" class="btn-primary" type="button" style="margin-top:8px;">Continue</button>
+  </div>
+
+  <!-- Screen 3: payer confirmation -->
+  <div id="payer-screen" class="screen">
+    <div class="step-label">Payer confirmation</div>
+    <div class="amount-display">&#8377;<span id="payer-amount">0</span></div>
+    <div class="confirm-line">
+      <span id="speaker-icon" class="speaker-icon">&#9658;</span>
+      <span id="confirm-text">Confirm to pay?</span>
+    </div>
+    <div class="spacer"></div>
+    <button id="confirm-pay-btn" class="btn-primary" type="button">Confirm &amp; Pay</button>
+    <button id="edit-amount-btn" class="btn-secondary" type="button">Edit amount</button>
+  </div>
+
+  <!-- Screen 4: payment link / status -->
+  <div id="payment-screen" class="screen">
+    <div class="step-label">Payment</div>
+    <div id="payment-loading">
+      <span class="spinner" style="border-top-color: var(--accent); border-color: rgba(15,122,95,0.2);"></span>
+      Creating payment link&hellip;
+    </div>
+    <div id="payment-ready" style="display:none;">
+      <div id="payment-qr" class="qr" role="img" aria-label="Demo payment reference code"></div>
+      <p class="link-text" id="payment-link-text"></p>
+      <div id="status-waiting">
+        <span class="spinner" style="border-top-color: var(--accent); border-color: rgba(15,122,95,0.2);"></span>
+        Waiting for payment&hellip;
+      </div>
+      <div id="status-error" style="display:none;">
+        <p>Couldn't confirm payment status. This is a demo simulation, not a real payment failure.</p>
+        <button id="retry-status-btn" class="btn-primary" type="button" style="max-width:200px;">Retry</button>
+      </div>
+      <div class="demo-controls">
+        <p>Demo-only: simulate the merchant's UPI app response</p>
+        <button id="simulate-success-btn" type="button">Simulate Success</button>
+        <button id="simulate-decline-btn" type="button">Simulate Decline</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 5: success -->
+  <div id="success-screen" class="screen">
+    <div class="success-icon">&#9989;</div>
+    <div class="success-title">Payment successful</div>
+    <p id="success-detail" class="link-text"></p>
+    <button id="new-transaction-btn" class="btn-primary" type="button" style="max-width:220px;">Start New Transaction</button>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------
+// Payer language: one-time app setting (localStorage), not re-detected
+// per transaction. Merchant language is always auto-detected server-side.
+// ---------------------------------------------------------------------
+const LANGUAGES = [
+  { code: "hi-IN", label: "Hindi" },
+  { code: "ta-IN", label: "Tamil" },
+  { code: "te-IN", label: "Telugu" },
+  { code: "kn-IN", label: "Kannada" },
+  { code: "ml-IN", label: "Malayalam" },
+  { code: "bn-IN", label: "Bengali" },
+  { code: "mr-IN", label: "Marathi" },
+  { code: "en-IN", label: "English" },
+];
+
+const PHRASE_TEMPLATES = {
+  "hi-IN": (amt) => `${amt} rupaye, pay karna hai?`,
+  "ta-IN": (amt) => `${amt} rூpாy, sellutha vēṇumā?`,
+  "te-IN": (amt) => `${amt} rupāyalu, cellinchāla?`,
+  "kn-IN": (amt) => `${amt} rupāyagaḷu, pāvatisabēkā?`,
+  "ml-IN": (amt) => `${amt} rūപ, adakkaṇamēā?`,
+  "bn-IN": (amt) => `${amt} ṭākā, debēn ki?`,
+  "mr-IN": (amt) => `${amt} rupaye, dyaycha ka?`,
+  "en-IN": (amt) => `${amt} rupees, pay now?`,
+};
+
+function log(step, ...args) {
+  console.log(`[Sarthi:${step}]`, ...args);
+}
+
+function getPayerLanguage() {
+  return localStorage.getItem("sarthi_payer_language") || "hi-IN";
+}
+
+function setPayerLanguage(code) {
+  localStorage.setItem("sarthi_payer_language", code);
+  log("settings", "payer language set to", code);
+  renderSettingsLabel();
+}
+
+function renderSettingsLabel() {
+  const code = getPayerLanguage();
+  const lang = LANGUAGES.find((l) => l.code === code);
+  document.getElementById("settings-lang-label").textContent = lang ? lang.label : code;
+}
+
+function initSettings() {
+  const select = document.getElementById("payer-language-select");
+  select.innerHTML = "";
+  LANGUAGES.forEach((l) => {
+    const opt = document.createElement("option");
+    opt.value = l.code;
+    opt.textContent = l.label;
+    select.appendChild(opt);
+  });
+  select.value = getPayerLanguage();
+  select.addEventListener("change", () => setPayerLanguage(select.value));
+  renderSettingsLabel();
+
+  document.getElementById("settings-toggle").addEventListener("click", () => {
+    const panel = document.getElementById("settings-panel");
+    panel.style.display = panel.style.display === "none" ? "block" : "none";
+  });
+}
+
+// ---------------------------------------------------------------------
+// Screen management (instant swap, no animation - design doc Pass 1/3)
+// ---------------------------------------------------------------------
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach((el) => el.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  log("screen", "->", id);
+}
+
+// ---------------------------------------------------------------------
+// Local QR-style placeholder (no external network call - the reference
+// it "encodes" is a local dummy payment, not something meant to be
+// scanned, so this is a deterministic decorative pattern, not a real QR)
+// ---------------------------------------------------------------------
+function cellHash(str) {
+  // FNV-1a - well-distributed bits, unlike a raw LCG's low bit
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+function renderLocalQr(seedText) {
+  const grid = 11;
+  const cell = 200 / grid;
+  const finder = (gx, gy) =>
+    (gx < 3 && gy < 3) || (gx >= grid - 3 && gy < 3) || (gx < 3 && gy >= grid - 3);
+  let rects = "";
+  for (let y = 0; y < grid; y++) {
+    for (let x = 0; x < grid; x++) {
+      if (finder(x, y)) continue;
+      // Fresh hash per cell (seed + coordinates), middle bit for a fair
+      // ~50/50 split - a single LCG's lowest bit is badly biased.
+      const h = cellHash(`${seedText}:${x}:${y}`);
+      if ((h >> 7) % 2 === 0) {
+        rects += `<rect x="${x * cell}" y="${y * cell}" width="${cell}" height="${cell}" fill="var(--ink)"/>`;
+      }
+    }
+  }
+  const finderSquare = (fx, fy) => `
+    <rect x="${fx}" y="${fy}" width="${cell * 3}" height="${cell * 3}" fill="var(--ink)"/>
+    <rect x="${fx + cell * 0.6}" y="${fy + cell * 0.6}" width="${cell * 1.8}" height="${cell * 1.8}" fill="var(--surface)"/>
+    <rect x="${fx + cell * 1.1}" y="${fy + cell * 1.1}" width="${cell * 0.8}" height="${cell * 0.8}" fill="var(--ink)"/>`;
+  const finders =
+    finderSquare(0, 0) + finderSquare(200 - cell * 3, 0) + finderSquare(0, 200 - cell * 3);
+  return `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <rect width="200" height="200" fill="var(--surface)"/>${rects}${finders}
+  </svg>`;
+}
+
+// ---------------------------------------------------------------------
+// Toast (calm-neutral error tone - never alarming red)
+// ---------------------------------------------------------------------
+let toastTimer = null;
+function showToast(message) {
+  log("toast", message);
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 4000);
+}
+
+// ---------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------
+let currentAmount = null;
+let mediaRecorder = null;
+let audioChunks = [];
+let statusPollTimer = null;
+let statusPollStart = null;
+
+// ---------------------------------------------------------------------
+// Screen 1: merchant mic capture
+// ---------------------------------------------------------------------
+const micButton = document.getElementById("mic-button");
+const merchantStateText = document.getElementById("merchant-state-text");
+let recording = false;
+
+micButton.addEventListener("click", async () => {
+  if (recording) {
+    stopRecording();
+    return;
+  }
+  await startRecording();
+});
+
+async function startRecording() {
+  log("mic", "requesting permission");
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    log("mic", "MediaRecorder unavailable");
+    showToast("This browser can't record audio here. Type the amount instead.");
+    showScreen("manual-screen");
+    document.getElementById("manual-amount-input").focus();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+    mediaRecorder.onstop = onRecordingStop;
+    mediaRecorder.start();
+    recording = true;
+    micButton.classList.add("listening");
+    merchantStateText.textContent = "Listening…";
+    log("mic", "recording started");
+  } catch (err) {
+    log("mic", "permission denied or error", err);
+    showToast("Couldn't hear that — mic permission denied. Type the amount instead.");
+    showScreen("manual-screen");
+    document.getElementById("manual-amount-input").focus();
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && recording) {
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach((t) => t.stop());
+    recording = false;
+    micButton.classList.remove("listening");
+    micButton.classList.add("processing");
+    merchantStateText.textContent = "Processing…";
+    log("mic", "recording stopped");
+  }
+}
+
+async function onRecordingStop() {
+  const blob = new Blob(audioChunks, { type: "audio/webm" });
+  const formData = new FormData();
+  formData.append("audio", blob, "recording.webm");
+
+  try {
+    const resp = await fetch("/transcribe", { method: "POST", body: formData });
+    const data = await resp.json();
+    log("transcribe", "response", data);
+    micButton.classList.remove("processing");
+    merchantStateText.textContent = "Tap to speak the amount";
+
+    if (!resp.ok || data.error) {
+      showToast("Couldn't hear that — try again or type the amount.");
+      showScreen("manual-screen");
+      document.getElementById("manual-amount-input").focus();
+      return;
+    }
+
+    if (data.amount === null || data.amount === undefined) {
+      showToast("Couldn't catch an amount — type it in.");
+      showScreen("manual-screen");
+      document.getElementById("manual-amount-input").focus();
+      return;
+    }
+
+    proceedToPayerScreen(data.amount);
+  } catch (err) {
+    log("transcribe", "network error", err);
+    micButton.classList.remove("processing");
+    merchantStateText.textContent = "Tap to speak the amount";
+    showToast("Network hiccup — try again or type the amount.");
+    showScreen("manual-screen");
+    document.getElementById("manual-amount-input").focus();
+  }
+}
+
+// ---------------------------------------------------------------------
+// Screen 2: manual amount fallback (never dead-ends)
+// ---------------------------------------------------------------------
+document.getElementById("manual-continue-btn").addEventListener("click", () => {
+  const val = parseFloat(document.getElementById("manual-amount-input").value);
+  if (!val || val <= 0) {
+    showToast("Enter an amount greater than 0.");
+    return;
+  }
+  log("manual-input", "amount", val);
+  proceedToPayerScreen(val);
+});
+
+document.getElementById("edit-amount-btn").addEventListener("click", () => {
+  showScreen("manual-screen");
+  const input = document.getElementById("manual-amount-input");
+  input.value = currentAmount || "";
+  input.focus();
+});
+
+// ---------------------------------------------------------------------
+// Screen 3: payer confirmation
+// ---------------------------------------------------------------------
+async function proceedToPayerScreen(amount) {
+  currentAmount = amount;
+  document.getElementById("payer-amount").textContent = Math.round(amount);
+  showScreen("payer-screen");
+  await speakConfirmation(amount);
+}
+
+async function speakConfirmation(amount) {
+  const lang = getPayerLanguage();
+  const template = PHRASE_TEMPLATES[lang] || PHRASE_TEMPLATES["en-IN"];
+  const text = template(Math.round(amount));
+  document.getElementById("confirm-text").textContent = text;
+
+  const icon = document.getElementById("speaker-icon");
+  const formData = new FormData();
+  formData.append("text", text);
+  formData.append("language_code", lang);
+
+  try {
+    icon.classList.add("playing");
+    const resp = await fetch("/speak", { method: "POST", body: formData });
+    const data = await resp.json();
+    log("speak", "response ok?", resp.ok);
+    if (!resp.ok || data.error || !data.audio_base64) {
+      // TTS is a nice-to-have, not a blocker (design doc Interaction States)
+      icon.classList.remove("playing");
+      return;
+    }
+    const audio = new Audio("data:audio/wav;base64," + data.audio_base64);
+    audio.onended = () => icon.classList.remove("playing");
+    audio.play();
+  } catch (err) {
+    log("speak", "network error (non-blocking)", err);
+    icon.classList.remove("playing");
+  }
+}
+
+document.getElementById("confirm-pay-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("confirm-pay-btn");
+  btn.disabled = true; // idempotency guard: disable on first click
+  btn.innerHTML = '<span class="spinner"></span>Creating payment…';
+  log("create-payment", "amount", currentAmount);
+
+  showScreen("payment-screen");
+  document.getElementById("payment-loading").style.display = "block";
+  document.getElementById("payment-ready").style.display = "none";
+
+  const formData = new FormData();
+  formData.append("amount", currentAmount);
+
+  try {
+    const resp = await fetch("/create-payment", { method: "POST", body: formData });
+    const data = await resp.json();
+    log("create-payment", "response", data);
+    btn.disabled = false;
+    btn.textContent = "Confirm & Pay";
+
+    if (!resp.ok || data.error) {
+      showToast("Couldn't create the payment link — try again.");
+      showScreen("payer-screen");
+      return;
+    }
+
+    document.getElementById("payment-loading").style.display = "none";
+    document.getElementById("payment-ready").style.display = "block";
+    const url = data.short_url || data.long_url || "";
+    document.getElementById("payment-link-text").textContent = url;
+    document.getElementById("payment-qr").innerHTML = renderLocalQr(url);
+
+    startStatusPolling();
+  } catch (err) {
+    log("create-payment", "network error", err);
+    btn.disabled = false;
+    btn.textContent = "Confirm & Pay";
+    showToast("Network hiccup creating the payment link — try again.");
+    showScreen("payer-screen");
+  }
+});
+
+// ---------------------------------------------------------------------
+// Screen 4: payment status polling (mocked backend, 60s cap)
+// ---------------------------------------------------------------------
+function startStatusPolling() {
+  document.getElementById("status-waiting").style.display = "block";
+  document.getElementById("status-error").style.display = "none";
+  statusPollStart = Date.now();
+  pollStatus();
+}
+
+function pollStatus() {
+  clearTimeout(statusPollTimer);
+  statusPollTimer = setTimeout(async () => {
+    try {
+      const resp = await fetch("/check-status");
+      const data = await resp.json();
+      log("check-status", "response", data);
+
+      if (data.status === "success") {
+        onPaymentSuccess();
+        return;
+      }
+      if (data.status === "decline") {
+        onPaymentDeclined();
+        return;
+      }
+      if (data.status === "timeout" || Date.now() - statusPollStart > 60000) {
+        onPollTimeout();
+        return;
+      }
+      pollStatus(); // still pending, keep polling
+    } catch (err) {
+      log("check-status", "network error", err);
+      onPollTimeout();
+    }
+  }, 2500);
+}
+
+function onPollTimeout() {
+  document.getElementById("status-waiting").style.display = "none";
+  document.getElementById("status-error").style.display = "block";
+}
+
+function onPaymentDeclined() {
+  showToast("Payment declined. Start over to try again.");
+  document.getElementById("status-waiting").style.display = "none";
+  document.getElementById("status-error").style.display = "block";
+  document.getElementById("status-error").querySelector("p").textContent =
+    "Payment was declined (demo simulation).";
+}
+
+document.getElementById("retry-status-btn").addEventListener("click", () => {
+  // Retry re-runs /check-status only — never recreates the payment link.
+  log("check-status", "retry");
+  document.getElementById("status-error").style.display = "none";
+  document.getElementById("status-waiting").style.display = "block";
+  statusPollStart = Date.now();
+  pollStatus();
+});
+
+document.getElementById("simulate-success-btn").addEventListener("click", () => simulateResult("success"));
+document.getElementById("simulate-decline-btn").addEventListener("click", () => simulateResult("decline"));
+
+async function simulateResult(status) {
+  log("simulate-result", status);
+  const formData = new FormData();
+  formData.append("status", status);
+  await fetch("/simulate-result", { method: "POST", body: formData });
+}
+
+// ---------------------------------------------------------------------
+// Screen 5: success
+// ---------------------------------------------------------------------
+function onPaymentSuccess() {
+  clearTimeout(statusPollTimer);
+  log("success", "payment complete");
+  document.getElementById("success-detail").textContent = `₹${Math.round(currentAmount)} paid successfully.`;
+  showScreen("success-screen");
+}
+
+document.getElementById("new-transaction-btn").addEventListener("click", async () => {
+  await resetDemo();
+});
+
+// ---------------------------------------------------------------------
+// Reset (rehearsal / encore safety net)
+// ---------------------------------------------------------------------
+document.getElementById("reset-btn").addEventListener("click", async () => {
+  await resetDemo();
+});
+
+async function resetDemo() {
+  log("reset", "clearing transaction state");
+  clearTimeout(statusPollTimer);
+  try {
+    await fetch("/reset", { method: "POST" });
+  } catch (err) {
+    log("reset", "network error (non-blocking)", err);
+  }
+  currentAmount = null;
+  document.getElementById("manual-amount-input").value = "";
+  showScreen("merchant-screen");
+}
+
+// ---------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------
+initSettings();
+log("init", "Paytm Sarthi ready");
+</script>
+</body>
+</html>
