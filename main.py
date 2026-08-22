@@ -276,15 +276,43 @@ async def transcribe(audio: UploadFile = File(...)):
 @app.post("/speak")
 @external_call("speak")
 async def speak(text: str = Form(...), language_code: str = Form(...)):
-    """TTS confirmation prompt in the payer's pre-set language (Bulbul)."""
+    """Translates `text` (English) into the payer's language via Sarvam's
+    real translation API, then speaks it via TTS (Bulbul). Returns both the
+    translated text (for on-screen display - real native script, not a
+    hand-rolled transliteration guess) and the audio.
+
+    mode="modern-colloquial" is deliberately pinned: mode="formal" was
+    tested live and found unreliable (garbled/repeating output for Tamil,
+    a corrupted number for Bengali - "150" became "fifty"). numerals_format
+    ="international" keeps digits as digits across every language tested.
+
+    Translation is best-effort: if it fails, falls back to speaking/
+    displaying the original English text rather than blocking the whole
+    request - TTS/localization is a nice-to-have here, not a blocker.
+    """
     if sarvam_client is None:
         return JSONResponse(
             status_code=503,
             content={"error": True, "step": "speak", "message": "SARVAM_API_KEY not configured"},
         )
 
+    display_text = text
+    if language_code != "en-IN":
+        try:
+            translation = await sarvam_client.text.translate(
+                input=text,
+                source_language_code="en-IN",
+                target_language_code=language_code,
+                mode="modern-colloquial",
+                output_script="fully-native",
+                numerals_format="international",
+            )
+            display_text = translation.translated_text
+        except Exception as exc:  # noqa: BLE001 - translation is best-effort
+            print(f"[speak] translation failed, falling back to English: {exc!r}")
+
     result = await sarvam_client.text_to_speech.convert(
-        text=text,
+        text=display_text,
         language_code=language_code,
         model="bulbul:v2",
     )
@@ -294,7 +322,7 @@ async def speak(text: str = Form(...), language_code: str = Form(...)):
             status_code=502,
             content={"error": True, "step": "speak", "message": "No audio returned"},
         )
-    return {"audio_base64": audio_b64}
+    return {"audio_base64": audio_b64, "display_text": display_text}
 
 
 @app.post("/create-payment")

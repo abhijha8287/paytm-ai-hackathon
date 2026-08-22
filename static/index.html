@@ -345,16 +345,17 @@ const LANGUAGES = [
   { code: "en-IN", label: "English" },
 ];
 
-const PHRASE_TEMPLATES = {
-  "hi-IN": (amt) => `${amt} rupaye, pay karna hai?`,
-  "ta-IN": (amt) => `${amt} rூpாy, sellutha vēṇumā?`,
-  "te-IN": (amt) => `${amt} rupāyalu, cellinchāla?`,
-  "kn-IN": (amt) => `${amt} rupāyagaḷu, pāvatisabēkā?`,
-  "ml-IN": (amt) => `${amt} rūപ, adakkaṇamēā?`,
-  "bn-IN": (amt) => `${amt} ṭākā, debēn ki?`,
-  "mr-IN": (amt) => `${amt} rupaye, dyaycha ka?`,
-  "en-IN": (amt) => `${amt} rupees, pay now?`,
-};
+// Demo merchant identity - the one place to change it. No real merchant
+// onboarding/lookup exists; this is a hardcoded local value by design.
+const MERCHANT_NAME = "Sagar";
+
+// Builds the confirmation sentence from structured values only (never by
+// concatenating unrelated UI text). This English sentence is sent to the
+// backend, which translates it into the payer's language via Sarvam's
+// real translation API and returns the native-script text + TTS audio.
+function buildConfirmationSentence({ amount, merchantName }) {
+  return `Pay ₹${Math.round(amount)} to ${merchantName}?`;
+}
 
 function log(step, ...args) {
   console.log(`[Sarthi:${step}]`, ...args);
@@ -703,22 +704,30 @@ async function proceedToPayerScreen(amount) {
 
 async function speakConfirmation(amount) {
   const lang = getPayerLanguage();
-  const template = PHRASE_TEMPLATES[lang] || PHRASE_TEMPLATES["en-IN"];
-  const text = template(Math.round(amount));
-  document.getElementById("confirm-text").textContent = text;
+  const englishText = buildConfirmationSentence({ amount, merchantName: MERCHANT_NAME });
+  // Show the English sentence immediately - never blocks on the network.
+  // Replaced with the real translated text below if that call succeeds.
+  document.getElementById("confirm-text").textContent = englishText;
 
   const icon = document.getElementById("speaker-icon");
   const formData = new FormData();
-  formData.append("text", text);
+  formData.append("text", englishText);
   formData.append("language_code", lang);
 
   try {
     icon.classList.add("playing");
     const resp = await fetch("/speak", { method: "POST", body: formData });
     const data = await resp.json();
-    log("speak", "response ok?", resp.ok);
-    if (!resp.ok || data.error || !data.audio_base64) {
+    log("speak", "response ok?", resp.ok, "display_text:", data.display_text);
+    if (!resp.ok || data.error) {
       // TTS is a nice-to-have, not a blocker (design doc Interaction States)
+      icon.classList.remove("playing");
+      return;
+    }
+    if (data.display_text) {
+      document.getElementById("confirm-text").textContent = data.display_text;
+    }
+    if (!data.audio_base64) {
       icon.classList.remove("playing");
       return;
     }
