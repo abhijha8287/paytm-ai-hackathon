@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&family=Noto+Sans+Kannada:wght@400;600;700&family=Noto+Sans+Malayalam:wght@400;600;700&family=Noto+Sans+Bengali:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- QR Code Generator for JavaScript, Copyright (c) 2009 Kazuhiko Arase, MIT license.
+     Vendored locally (no CDN/network dependency) - github.com/kazuhikoarase/qrcode-generator -->
+<script src="/qrcode.js"></script>
 <style>
   :root {
     --accent: #0f7a5f;       /* deep teal/emerald - primary actions, success */
@@ -311,46 +314,27 @@ function showScreen(id) {
 }
 
 // ---------------------------------------------------------------------
-// Local QR-style placeholder (no external network call - the reference
-// it "encodes" is a local dummy payment, not something meant to be
-// scanned, so this is a deterministic decorative pattern, not a real QR)
+// Real QR code (vendored qrcode-generator library, no network call) -
+// encodes a UPI-style payment intent string carrying the actual amount.
+// A real, correctly-encoded, independently-scannable QR - verified by
+// round-tripping through zbarimg during development, not a fake pattern.
 // ---------------------------------------------------------------------
-function cellHash(str) {
-  // FNV-1a - well-distributed bits, unlike a raw LCG's low bit
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
+function upiPaymentString(orderId, amount) {
+  const params = new URLSearchParams({
+    pa: "sarthi.demo@local", // demo-only VPA, not a real payee - never routes real money
+    pn: "Paytm Sarthi",
+    am: amount.toFixed(2),
+    cu: "INR",
+    tn: orderId,
+  });
+  return "upi://pay?" + params.toString();
 }
 
-function renderLocalQr(seedText) {
-  const grid = 11;
-  const cell = 200 / grid;
-  const finder = (gx, gy) =>
-    (gx < 3 && gy < 3) || (gx >= grid - 3 && gy < 3) || (gx < 3 && gy >= grid - 3);
-  let rects = "";
-  for (let y = 0; y < grid; y++) {
-    for (let x = 0; x < grid; x++) {
-      if (finder(x, y)) continue;
-      // Fresh hash per cell (seed + coordinates), middle bit for a fair
-      // ~50/50 split - a single LCG's lowest bit is badly biased.
-      const h = cellHash(`${seedText}:${x}:${y}`);
-      if ((h >> 7) % 2 === 0) {
-        rects += `<rect x="${x * cell}" y="${y * cell}" width="${cell}" height="${cell}" fill="var(--ink)"/>`;
-      }
-    }
-  }
-  const finderSquare = (fx, fy) => `
-    <rect x="${fx}" y="${fy}" width="${cell * 3}" height="${cell * 3}" fill="var(--ink)"/>
-    <rect x="${fx + cell * 0.6}" y="${fy + cell * 0.6}" width="${cell * 1.8}" height="${cell * 1.8}" fill="var(--surface)"/>
-    <rect x="${fx + cell * 1.1}" y="${fy + cell * 1.1}" width="${cell * 0.8}" height="${cell * 0.8}" fill="var(--ink)"/>`;
-  const finders =
-    finderSquare(0, 0) + finderSquare(200 - cell * 3, 0) + finderSquare(0, 200 - cell * 3);
-  return `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-    <rect width="200" height="200" fill="var(--surface)"/>${rects}${finders}
-  </svg>`;
+function renderLocalQr(dataString) {
+  const qr = qrcode(0, "M"); // 0 = auto type/version, "M" = ~15% error correction
+  qr.addData(dataString);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 4, margin: 4, scalable: true });
 }
 
 // ---------------------------------------------------------------------
@@ -557,7 +541,8 @@ document.getElementById("confirm-pay-btn").addEventListener("click", async () =>
     document.getElementById("payment-ready").style.display = "block";
     const url = data.short_url || data.long_url || "";
     document.getElementById("payment-link-text").textContent = url;
-    document.getElementById("payment-qr").innerHTML = renderLocalQr(url);
+    const upiString = upiPaymentString(data.order_id, currentAmount);
+    document.getElementById("payment-qr").innerHTML = renderLocalQr(upiString);
 
     startStatusPolling();
   } catch (err) {
