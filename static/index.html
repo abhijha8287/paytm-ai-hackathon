@@ -10,6 +10,8 @@
 <!-- QR Code Generator for JavaScript, Copyright (c) 2009 Kazuhiko Arase, MIT license.
      Vendored locally (no CDN/network dependency) - github.com/kazuhikoarase/qrcode-generator -->
 <script src="/qrcode.js"></script>
+<!-- jsQR decoder, Apache License 2.0. Vendored locally - github.com/cozmo/jsQR -->
+<script src="/jsqr.js"></script>
 <style>
   :root {
     --accent: #0f7a5f;       /* deep teal/emerald - primary actions, success */
@@ -86,6 +88,29 @@
   }
   #merchant-state-text { font-size: 17px; color: var(--ink-muted); min-height: 24px; }
   #merchant-hint { font-size: 15px; color: var(--ink-muted); max-width: 280px; }
+  .payer-id-display {
+    font-size: 14px; color: var(--ink-muted); margin: 0 0 16px;
+    min-height: 20px;
+  }
+  .change-payer-btn { margin-top: 4px; }
+
+  /* ---- Payer identification screen (demo-only, local) ---- */
+  #payer-id-screen { justify-content: center; align-items: stretch; text-align: center; gap: 8px; }
+  #payer-id-screen .step-label { margin-bottom: 8px; }
+  #payer-id-hint { font-size: 15px; color: var(--ink-muted); margin-bottom: 32px; }
+  #qr-scan-view, #upi-id-view { display: none; flex-direction: column; }
+  #qr-video {
+    width: 100%; aspect-ratio: 1 / 1; object-fit: cover;
+    border-radius: 12px; border: 1px solid var(--border);
+    background: #000; margin-bottom: 14px;
+  }
+  #qr-scan-status { font-size: 14px; color: var(--ink-muted); margin-bottom: 14px; }
+  #upi-id-view label { font-size: 15px; font-weight: 600; color: var(--ink); text-align: left; margin-bottom: 8px; }
+  #upi-id-input {
+    width: 100%; min-height: 52px; font-size: 18px; padding: 12px 16px;
+    border: 1.5px solid var(--border); border-radius: 10px; font-family: inherit;
+    margin-bottom: 14px;
+  }
 
   /* ---- Payer screen ---- */
   #payer-screen { justify-content: flex-start; }
@@ -173,11 +198,36 @@
     <select id="payer-language-select" style="margin-top:8px; width:100%;"></select>
   </div>
 
+  <!-- Screen 0: payer identification (demo-only, local - not a real UPI/QR integration) -->
+  <div id="payer-id-screen" class="screen active">
+    <div class="step-label">Identify payer</div>
+    <div id="payer-id-hint">Scan the payer's QR or enter their UPI ID (demo-only, not verified against anything)</div>
+
+    <button id="scan-qr-btn" class="btn-primary" type="button">Scan QR</button>
+    <button id="show-upi-input-btn" class="btn-secondary" type="button">Enter UPI ID instead</button>
+
+    <div id="qr-scan-view">
+      <video id="qr-video" autoplay playsinline muted></video>
+      <canvas id="qr-canvas" style="display:none;"></canvas>
+      <div id="qr-scan-status">Point the camera at any QR code&hellip;</div>
+      <button id="qr-scan-cancel-btn" class="btn-secondary" type="button">Cancel</button>
+    </div>
+
+    <div id="upi-id-view">
+      <label for="upi-id-input">UPI ID</label>
+      <input id="upi-id-input" type="text" placeholder="example@upi" autocomplete="off">
+      <button id="upi-id-continue-btn" class="btn-primary" type="button">Continue</button>
+      <button id="upi-id-cancel-btn" class="btn-secondary" type="button">Back</button>
+    </div>
+  </div>
+
   <!-- Screen 1: merchant recording -->
-  <div id="merchant-screen" class="screen active">
+  <div id="merchant-screen" class="screen">
+    <div class="payer-id-display"></div>
     <button id="mic-button" class="mic-button" type="button" aria-label="Tap to speak the amount">&#127908;</button>
     <div id="merchant-state-text">Tap to speak the amount</div>
     <div id="merchant-hint">Speak in any language. No need to select one.</div>
+    <button class="btn-secondary change-payer-btn" type="button">Change payer</button>
   </div>
 
   <!-- Screen 2: manual amount fallback (never dead-ends) -->
@@ -196,9 +246,11 @@
       <span id="speaker-icon" class="speaker-icon">&#9658;</span>
       <span id="confirm-text">Confirm to pay?</span>
     </div>
+    <div class="payer-id-display"></div>
     <div class="spacer"></div>
     <button id="confirm-pay-btn" class="btn-primary" type="button">Confirm &amp; Pay</button>
     <button id="edit-amount-btn" class="btn-secondary" type="button">Edit amount</button>
+    <button class="btn-secondary change-payer-btn" type="button">Change payer</button>
   </div>
 
   <!-- Screen 4: payment link / status -->
@@ -354,10 +406,139 @@ function showToast(message) {
 // State
 // ---------------------------------------------------------------------
 let currentAmount = null;
+let payerIdentifier = null; // demo-only - never sent to the backend, never validated
 let mediaRecorder = null;
 let audioChunks = [];
 let statusPollTimer = null;
 let statusPollStart = null;
+
+// ---------------------------------------------------------------------
+// Screen 0: payer identification (demo-only, local)
+// Scan QR: any decoded QR value is accepted as-is - no verification this
+// is a real payment QR. Enter UPI ID: any non-empty string is accepted.
+// Neither path makes a network call or talks to a payment provider.
+// ---------------------------------------------------------------------
+let qrScanStream = null;
+let qrScanRAF = null;
+
+function renderPayerIdDisplay() {
+  const label = payerIdentifier ? `Payer: ${payerIdentifier}` : "";
+  document.querySelectorAll(".payer-id-display").forEach((el) => {
+    el.textContent = label;
+  });
+}
+
+function resetPayerIdScreenUI() {
+  document.getElementById("qr-scan-view").style.display = "none";
+  document.getElementById("upi-id-view").style.display = "none";
+  document.getElementById("scan-qr-btn").style.display = "block";
+  document.getElementById("show-upi-input-btn").style.display = "block";
+  document.getElementById("upi-id-input").value = "";
+}
+
+function goToPayerIdScreen() {
+  stopQrScan();
+  resetPayerIdScreenUI();
+  showScreen("payer-id-screen");
+}
+
+function proceedFromPayerId() {
+  log("payer-id", "captured", payerIdentifier);
+  renderPayerIdDisplay();
+  showScreen("merchant-screen");
+}
+
+document.getElementById("show-upi-input-btn").addEventListener("click", () => {
+  document.getElementById("upi-id-view").style.display = "flex";
+  document.getElementById("scan-qr-btn").style.display = "none";
+  document.getElementById("show-upi-input-btn").style.display = "none";
+  document.getElementById("upi-id-input").focus();
+});
+
+document.getElementById("upi-id-cancel-btn").addEventListener("click", resetPayerIdScreenUI);
+
+document.getElementById("upi-id-continue-btn").addEventListener("click", () => {
+  const val = document.getElementById("upi-id-input").value.trim();
+  if (!val) {
+    showToast("Enter a UPI ID to continue.");
+    return;
+  }
+  payerIdentifier = val;
+  proceedFromPayerId();
+});
+
+document.getElementById("scan-qr-btn").addEventListener("click", startQrScan);
+document.getElementById("qr-scan-cancel-btn").addEventListener("click", () => {
+  stopQrScan();
+  resetPayerIdScreenUI();
+});
+
+async function startQrScan() {
+  log("payer-id", "starting QR scan");
+  if (!navigator.mediaDevices || !window.jsQR) {
+    log("payer-id", "camera or jsQR unavailable");
+    showToast("Camera scanning isn't available here — enter a UPI ID instead.");
+    return;
+  }
+  document.getElementById("qr-scan-view").style.display = "flex";
+  document.getElementById("scan-qr-btn").style.display = "none";
+  document.getElementById("show-upi-input-btn").style.display = "none";
+  try {
+    qrScanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+    });
+    const video = document.getElementById("qr-video");
+    video.srcObject = qrScanStream;
+    await video.play();
+    qrScanLoop();
+  } catch (err) {
+    log("payer-id", "camera error — falling back to UPI ID entry", err);
+    showToast("Couldn't access the camera — enter a UPI ID instead.");
+    stopQrScan();
+    document.getElementById("upi-id-view").style.display = "flex";
+    document.getElementById("upi-id-input").focus();
+  }
+}
+
+function qrScanLoop() {
+  const video = document.getElementById("qr-video");
+  const canvas = document.getElementById("qr-canvas");
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result = jsQR(imageData.data, imageData.width, imageData.height);
+    if (result && result.data) {
+      log("payer-id", "QR detected", result.data);
+      payerIdentifier = result.data;
+      stopQrScan();
+      proceedFromPayerId();
+      return;
+    }
+  }
+  qrScanRAF = requestAnimationFrame(qrScanLoop);
+}
+
+function stopQrScan() {
+  if (qrScanRAF) cancelAnimationFrame(qrScanRAF);
+  qrScanRAF = null;
+  if (qrScanStream) {
+    qrScanStream.getTracks().forEach((t) => t.stop());
+    qrScanStream = null;
+  }
+  const view = document.getElementById("qr-scan-view");
+  if (view) view.style.display = "none";
+}
+
+document.querySelectorAll(".change-payer-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    log("change-payer", "returning to payer-id screen (amount + transaction untouched)");
+    if (recording) stopRecording();
+    goToPayerIdScreen();
+  });
+});
 
 // ---------------------------------------------------------------------
 // Screen 1: merchant mic capture
@@ -646,22 +827,26 @@ document.getElementById("reset-btn").addEventListener("click", async () => {
 });
 
 async function resetDemo() {
-  log("reset", "clearing transaction state");
+  log("reset", "clearing entire transaction (amount + payer id)");
   clearTimeout(statusPollTimer);
+  if (recording) stopRecording();
   try {
     await fetch("/reset", { method: "POST" });
   } catch (err) {
     log("reset", "network error (non-blocking)", err);
   }
   currentAmount = null;
+  payerIdentifier = null;
+  renderPayerIdDisplay();
   document.getElementById("manual-amount-input").value = "";
-  showScreen("merchant-screen");
+  goToPayerIdScreen();
 }
 
 // ---------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------
 initSettings();
+resetPayerIdScreenUI();
 log("init", "Paytm Sarthi ready");
 </script>
 </body>
