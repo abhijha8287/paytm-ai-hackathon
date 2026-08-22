@@ -14,13 +14,17 @@
 <script src="/jsqr.js"></script>
 <style>
   :root {
-    --accent: #0f7a5f;       /* deep teal/emerald - primary actions, success */
+    --brand: #0057d9;        /* Paytm-style blue - primary brand color, CTAs */
+    --brand-dark: #003b99;   /* pressed state, high-contrast brand text */
+    --brand-tint: #eaf2ff;   /* very subtle blue - card/background tint */
+    --brand-tint-border: #d6e6ff;
+    --accent: #0f7a5f;       /* deep teal/emerald - RESERVED for success/positive states only */
     --accent-dark: #0b5c47;
     --ink: #1a1a1a;
     --ink-muted: #555;
-    --bg: #fafafa;
+    --bg: #f7f9fc;           /* faint cool tint instead of neutral gray */
     --surface: #ffffff;
-    --border: #e2e2e2;
+    --border: #dfe6f0;       /* faint cool tint instead of neutral gray */
     --error-bg: #fbf3e7;     /* calm neutral, never alarming red */
     --error-ink: #4a3f2f;
   }
@@ -63,7 +67,16 @@
     font-family: inherit;
   }
   .screen { display: none; flex: 1; flex-direction: column; }
-  .screen.active { display: flex; }
+  .screen.active { display: flex; animation: screen-enter 220ms ease-out; }
+  @keyframes screen-enter {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .screen.active .btn-primary { animation: cta-in 240ms ease-out 60ms both; }
+  @keyframes cta-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
 
   /* ---- Merchant screen ---- */
   #merchant-screen { align-items: center; justify-content: center; text-align: center; gap: 24px; }
@@ -71,7 +84,7 @@
     width: 140px; height: 140px;
     border-radius: 50%;
     border: none;
-    background: var(--accent);
+    background: var(--brand);
     color: #fff;
     font-size: 48px;
     display: flex; align-items: center; justify-content: center;
@@ -79,12 +92,12 @@
     transition: transform 0.15s ease;
   }
   .mic-button:active { transform: scale(0.96); }
-  .mic-button.listening { background: #c0392b0d; background: var(--accent-dark); animation: pulse 1.2s infinite; }
+  .mic-button.listening { background: var(--brand-dark); animation: pulse 1.2s infinite; }
   .mic-button.processing { background: var(--ink-muted); animation: none; }
   @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(15,122,95,0.4); }
-    70% { box-shadow: 0 0 0 22px rgba(15,122,95,0); }
-    100% { box-shadow: 0 0 0 0 rgba(15,122,95,0); }
+    0% { box-shadow: 0 0 0 0 rgba(0,87,217,0.4); }
+    70% { box-shadow: 0 0 0 22px rgba(0,87,217,0); }
+    100% { box-shadow: 0 0 0 0 rgba(0,87,217,0); }
   }
   #merchant-state-text { font-size: 17px; color: var(--ink-muted); min-height: 24px; }
   #merchant-hint { font-size: 15px; color: var(--ink-muted); max-width: 280px; }
@@ -96,6 +109,18 @@
 
   /* ---- Payer identification screen (demo-only, local) ---- */
   #payer-id-screen { justify-content: center; align-items: stretch; text-align: center; gap: 8px; }
+  .brand-block { margin-bottom: 32px; }
+  .brand-mark {
+    width: 56px; height: 56px; margin: 0 auto 16px;
+    border-radius: 16px; background: var(--brand); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; font-weight: 700;
+  }
+  .brand-title {
+    margin: 0 0 6px; font-size: 26px; font-weight: 800;
+    letter-spacing: 0.01em; color: var(--brand-dark);
+  }
+  .brand-subtitle { margin: 0; font-size: 15px; color: var(--ink-muted); }
   #payer-id-screen .step-label { margin-bottom: 8px; }
   #payer-id-hint { font-size: 15px; color: var(--ink-muted); margin-bottom: 32px; }
   #qr-scan-view, #upi-id-view { display: none; flex-direction: column; }
@@ -126,12 +151,12 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 12px; flex-shrink: 0; color: var(--ink-muted);
   }
-  .speaker-icon.playing { border-color: var(--accent); color: var(--accent); animation: pulse-icon 0.8s infinite; }
+  .speaker-icon.playing { border-color: var(--brand); color: var(--brand); animation: pulse-icon 0.8s infinite; }
   @keyframes pulse-icon { 50% { opacity: 0.4; } }
   .spacer { flex: 1; }
   .btn-primary {
     width: 100%; min-height: 52px; padding: 16px; font-size: 18px; font-weight: 600;
-    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    background: var(--brand); color: #fff; border: none; border-radius: 10px;
     margin-bottom: 14px; cursor: pointer; font-family: inherit;
   }
   .btn-primary:disabled { opacity: 0.6; cursor: default; }
@@ -160,8 +185,17 @@
     min-height: 44px; padding: 0 16px; margin: 0 6px; font-size: 14px;
     border-radius: 8px; border: 1px solid var(--border); background: var(--surface); font-family: inherit;
   }
-  .success-icon { font-size: 56px; }
-  .success-title { font-size: 24px; font-weight: 700; }
+  .success-icon {
+    font-size: 40px; font-weight: 700; width: 84px; height: 84px; line-height: 84px;
+    border-radius: 50%; background: var(--accent); color: #fff; margin: 0 auto;
+    animation: success-pop 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes success-pop {
+    0% { opacity: 0; transform: scale(0.75); }
+    70% { opacity: 1; transform: scale(1.06); }
+    100% { transform: scale(1); }
+  }
+  .success-title { font-size: 24px; font-weight: 700; color: var(--accent-dark); }
 
   /* ---- Toast (calm-neutral, never alarming) ---- */
   #toast {
@@ -200,6 +234,11 @@
 
   <!-- Screen 0: payer identification (demo-only, local - not a real UPI/QR integration) -->
   <div id="payer-id-screen" class="screen active">
+    <div class="brand-block">
+      <div class="brand-mark">&#8377;</div>
+      <h1 class="brand-title">PAYTM SARTHI</h1>
+      <p class="brand-subtitle">Voice-first payments across languages</p>
+    </div>
     <div class="step-label">Identify payer</div>
     <div id="payer-id-hint">Scan the payer's QR or enter their UPI ID (demo-only, not verified against anything)</div>
 
@@ -257,14 +296,14 @@
   <div id="payment-screen" class="screen">
     <div class="step-label">Payment</div>
     <div id="payment-loading">
-      <span class="spinner" style="border-top-color: var(--accent); border-color: rgba(15,122,95,0.2);"></span>
+      <span class="spinner" style="border-top-color: var(--brand); border-color: rgba(0,87,217,0.2);"></span>
       Creating payment link&hellip;
     </div>
     <div id="payment-ready" style="display:none;">
       <div id="payment-qr" class="qr" role="img" aria-label="Demo payment reference code"></div>
       <p class="link-text" id="payment-link-text"></p>
       <div id="status-waiting">
-        <span class="spinner" style="border-top-color: var(--accent); border-color: rgba(15,122,95,0.2);"></span>
+        <span class="spinner" style="border-top-color: var(--brand); border-color: rgba(0,87,217,0.2);"></span>
         Waiting for payment&hellip;
       </div>
       <div id="status-error" style="display:none;">
@@ -281,7 +320,7 @@
 
   <!-- Screen 5: success -->
   <div id="success-screen" class="screen">
-    <div class="success-icon">&#9989;</div>
+    <div class="success-icon">&#10003;</div>
     <div class="success-title">Payment successful</div>
     <p id="success-detail" class="link-text"></p>
     <button id="new-transaction-btn" class="btn-primary" type="button" style="max-width:220px;">Start New Transaction</button>
