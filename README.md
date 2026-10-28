@@ -1,70 +1,59 @@
-# PAYTM HACKATHON
-# Paytm Sarthi — Cross-Language Voice Payment Bridge
+# Paytm Sarthi: Cross-Language Voice Payment
 
-A payer is identified first (scan a QR or enter a UPI ID — demo-only, not
-verified against anything). Then a merchant speaks an amount out loud in
-any language, with no language selection. The payer sees and hears that
-amount in their own pre-set language, confirms, and completes a payment —
-locally simulated, no external payment gateway involved.
+A merchant says a payment amount aloud in any language; the payer sees and hears it in their own language, confirms, and completes a simulated payment.
 
-- **Voice, translation, and amount extraction**: real, live — Sarvam AI
-  (Saaras v3 speech-to-English + language auto-detect, Sarvam-M as an
-  extraction fallback, Bulbul text-to-speech).
-- **Payer identification**: demo-only, fully local — a real QR *decoder*
-  (camera scan) accepts any detected QR value as-is, or you can type any
-  UPI ID. Nothing is validated or sent anywhere.
-- **Payment**: a fully local dummy flow — a generated reference ID, a real
-  (genuinely scannable) QR code encoding a UPI-style payment string with
-  the amount, and a "Simulate Success/Decline" control that drives the
-  same success/failure UI a real payment gateway would. No Paytm or any
-  other payment provider is involved.
+## Why this exists
+Built for a Paytm AI hackathon. In India, a shopkeeper and a customer often do not share a language, which makes it easy to misunderstand the amount at the counter.
 
-## Run it — two ways
+## What it does
+- Identifies the payer by scanning a QR code or typing a UPI ID (demo only, nothing is verified)
+- Records the merchant speaking an amount; the language is detected automatically
+- Translates and extracts the amount with Sarvam AI (Saaras v3 speech-to-English, Sarvam-M fallback)
+- Speaks the confirmation back in the payer's chosen language with Bulbul text-to-speech
+- Creates a local payment reference and a scannable UPI-style QR code
+- Simulates success or decline; no Paytm or other payment provider is called
+- Falls back to manual amount entry if the mic is blocked or the amount is unclear
 
-### Option A: Docker (recommended if you want it on your phone)
-
-This is the only way to get the mic and camera working on a phone: mobile
-browsers block microphone/camera access on a plain `http://<lan-ip>` — it
-has to be `https://` (or `localhost`). The Docker setup generates a
-self-signed HTTPS certificate for your machine's actual LAN IP automatically.
-
-```bash
-cp .env.example .env      # then edit .env and set SARVAM_API_KEY
-./run-docker.sh
+## Project structure
+```
+paytm-ai-hackathon/
+├── main.py             FastAPI app and Sarvam calls
+├── static/             Web page, QR scanner and generator
+├── docker/             Container entrypoint (HTTPS cert)
+├── Dockerfile          Container image
+├── docker-compose.yml  Local HTTPS setup
+├── run-docker.sh       Builds and starts with LAN HTTPS
+├── TODOS.md            Open work items
+└── requirements.txt    Python dependencies
 ```
 
-The script detects your LAN IP, builds the image, and prints the two URLs:
+## Getting started
+Requirements: a Sarvam AI API key; Docker (to test on a phone) or Python 3.9+ (laptop only).
 
-- **On this laptop**: `https://localhost:8000`
-- **On your phone** (same wifi): `https://<your-lan-ip>:8000`
-
-Your phone's (and laptop's) browser will show a certificate warning —
-that's expected for a self-signed cert; tap **Advanced → Proceed** (Chrome)
-or **visit this website** (Safari) once. The connection is still fully
-local and encrypted; nothing leaves your network.
-
-To stop it: `docker compose down`
-
-### Option B: Run directly with Python (laptop only)
-
-Camera/mic won't work from a phone this way (plain HTTP) — use this if
-you're only testing on the same laptop.
-
+On a phone (mobile browsers need HTTPS for mic and camera):
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+git clone https://github.com/abhijha8287/paytm-ai-hackathon.git
+cd paytm-ai-hackathon
+cp .env.example .env          # set SARVAM_API_KEY
+./run-docker.sh               # prints https://localhost:8000 and https://<lan-ip>:8000
+```
+Accept the self-signed certificate warning once. Stop with `docker compose down`.
+
+Laptop only:
+```bash
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env               # then edit .env and set SARVAM_API_KEY
-uvicorn main:app --reload
+cp .env.example .env
+uvicorn main:app --reload     # http://127.0.0.1:8000
 ```
 
-Open **http://127.0.0.1:8000**.
+## Configuration
+| Variable | Purpose |
+|:--|:--|
+| `SARVAM_API_KEY` | Speech-to-text, translation, text-to-speech |
 
-## Requirements
-
-- A Sarvam AI API key — get one free at [dashboard.sarvam.ai](https://dashboard.sarvam.ai)
-- For Option A: Docker Desktop running
-- For Option B: Python 3.9+
+## Tech stack
+Python, FastAPI, Sarvam AI (Saaras v3, Sarvam-M, Bulbul), JavaScript, jsQR, qrcode.js, Docker
 
 ## Using it
 
